@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube 同時視聴</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0f13; --panel: #1a1a22; --panel2: #23232e;
+    --accent: #ff4757; --accent2: #5352ed; --text: #eaeaf0; --sub: #9a9aac;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    min-height: 100vh;
+  }
+  /* ---------- Lobby ---------- */
+  #lobby {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh; gap: 24px; padding: 20px;
+  }
+  #lobby h1 { font-size: 1.9rem; }
+  #lobby h1 span { color: var(--accent); }
+  .card {
+    background: var(--panel); border-radius: var(--radius);
+    padding: 28px; width: 100%; max-width: 420px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .card h2 { font-size: 1.05rem; color: var(--sub); font-weight: 600; }
+  input[type=text] {
+    background: var(--panel2); border: 1px solid #333344; color: var(--text);
+    border-radius: 8px; padding: 11px 14px; font-size: 0.95rem; width: 100%;
+    outline: none;
+  }
+  input[type=text]:focus { border-color: var(--accent2); }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 11px 18px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  button.secondary { background: var(--accent2); }
+  button.ghost { background: var(--panel2); color: var(--text); }
+  button:disabled { opacity: .4; cursor: default; }
+  #lobbyStatus { color: var(--sub); font-size: .85rem; min-height: 1.2em; text-align: center; }
+
+  /* ---------- Main ---------- */
+  #main { display: none; padding: 16px; max-width: 1280px; margin: 0 auto; }
+  #topbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+  }
+  #topbar .title { font-weight: 700; font-size: 1.1rem; }
+  #topbar .title span { color: var(--accent); }
+  #roomBadge {
+    background: var(--panel2); border-radius: 8px; padding: 7px 12px;
+    font-family: monospace; font-size: 1rem; letter-spacing: 2px; cursor: pointer;
+  }
+  #roomBadge:hover { background: #2d2d3a; }
+  #btnInvite { padding: 7px 14px; font-size: .82rem; }
+  #peerCount { color: var(--sub); font-size: .85rem; }
+  #layout { display: flex; gap: 16px; align-items: flex-start; }
+  #playerWrap { flex: 1; min-width: 0; }
+  #playerBox {
+    position: relative; width: 100%; aspect-ratio: 16/9;
+    background: #000; border-radius: var(--radius); overflow: hidden;
+  }
+  #playerBox iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #playerEmpty {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; color: var(--sub); font-size: .95rem;
+  }
+  #btnUnmute {
+    position: absolute; top: 12px; left: 12px; z-index: 5;
+    background: var(--accent); font-size: .85rem; box-shadow: 0 2px 10px rgba(0,0,0,.5);
+  }
+  #nowTitle { margin-top: 10px; font-size: .95rem; color: var(--text); min-height: 1.3em; }
+  #controlsRow { margin-top: 8px; display: flex; gap: 8px; }
+  #btnCC { padding: 6px 14px; font-size: .8rem; }
+  #btnCC.ccon { background: var(--accent2); color: #fff; }
+  #syncNote { margin-top: 6px; color: var(--sub); font-size: .78rem; }
+
+  /* ---------- Queue ---------- */
+  #queuePanel {
+    width: 360px; flex-shrink: 0; background: var(--panel);
+    border-radius: var(--radius); padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+    max-height: calc(100vh - 110px);
+  }
+  #queuePanel h2 { font-size: .95rem; color: var(--sub); }
+  #addRow { display: flex; gap: 8px; }
+  #addRow input { flex: 1; }
+  #queueList { list-style: none; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  #queueList li {
+    background: var(--panel2); border-radius: 8px; padding: 7px 8px;
+    display: flex; align-items: center; gap: 8px; cursor: grab;
+    border: 1px solid transparent; font-size: .85rem;
+  }
+  #queueList li.playing { border-color: var(--accent); }
+  #queueList li.dragover { border-color: var(--accent2); }
+  #queueList li .grip { color: var(--sub); cursor: grab; user-select: none; }
+  #queueList li .thumb {
+    width: 60px; height: 34px; object-fit: cover; border-radius: 4px;
+    flex-shrink: 0; background: #000;
+  }
+  #queueList li .qtitle {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  }
+  #queueList li .qtitle:hover { color: var(--accent); }
+  #queueList li .del {
+    background: none; color: var(--sub); padding: 2px 6px; font-size: 1rem;
+  }
+  #queueList li .del:hover { color: var(--accent); }
+  #queueEmpty { color: var(--sub); font-size: .82rem; text-align: center; padding: 12px 0; }
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--panel2); padding: 10px 20px; border-radius: 8px;
+    font-size: .85rem; opacity: 0; transition: opacity .3s; pointer-events: none;
+    border: 1px solid #333344; z-index: 99; max-width: 90vw; text-align: center;
+  }
+  #toast.show { opacity: 1; }
+  @media (max-width: 900px) {
+    #layout { flex-direction: column; }
+    #queuePanel { width: 100%; max-height: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ロビー画面 -->
+<div id="lobby">
+  <h1>▶ YouTube <span>同時視聴</span></h1>
+  <div class="card">
+    <h2>新しいルームを作成</h2>
+    <button id="btnCreate">ルームを作成する</button>
+  </div>
+  <div class="card">
+    <h2>ルームに参加</h2>
+    <input type="text" id="joinInput" placeholder="ルームID(例: ABC123)" maxlength="6">
+    <button class="secondary" id="btnJoin">参加する</button>
+  </div>
+  <div id="lobbyStatus"></div>
+</div>
+
+<!-- メイン画面 -->
+<div id="main">
+  <div id="topbar">
+    <div class="title">▶ YouTube <span>同時視聴</span></div>
+    <div id="roomBadge" title="クリックでルームIDをコピー"></div>
+    <button id="btnInvite" class="ghost">招待リンクをコピー</button>
+    <div id="peerCount"></div>
+  </div>
+  <div id="layout">
+    <div id="playerWrap">
+      <div id="playerBox">
+        <div id="playerEmpty">再生リストに動画を追加してください</div>
+        <div id="player"></div>
+        <button id="btnUnmute" hidden>🔊 タップしてミュート解除</button>
+      </div>
+      <div id="nowTitle"></div>
+      <div id="controlsRow">
+        <button id="btnCC" class="ghost" title="全員の字幕表示を切り替えます">字幕: OFF</button>
+      </div>
+      <div id="syncNote">※ 再生・一時停止・シーク操作は参加者全員に同期されます。</div>
+    </div>
+    <div id="queuePanel">
+      <h2>再生リスト(キュー)</h2>
+      <div id="addRow">
+        <input type="text" id="urlInput" placeholder="YouTube動画のURLを貼り付け">
+        <button id="btnAdd">追加</button>
+      </div>
+      <ul id="queueList"></ul>
+      <div id="queueEmpty">キューは空です</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ====================== 状態 ====================== */
+const PREFIX = "ytsync-room-";
+let peer = null;
+let isHost = false;
+let joined = false;          // 入室済みフラグ
+let migrating = false;       // ホスト引き継ぎ/再接続中
+let roomCode = "";
+let connections = [];        // ホスト: 全ゲスト接続 / ゲスト: [ホスト接続]
+let roster = [];             // ゲストpeer IDの参加順リスト(ホスト引き継ぎ順)
+let queue = [];              // [{id, title}]
+let currentIndex = -1;
+let currentVideoId = null;   // プレーヤーに読み込み済みの動画ID
+let player = null;
+let playerReady = false;
+let suppressUntil = 0;       // この時刻まで自分発のイベント送信を抑制
+let suppressRateUntil = 0;   // 速度変更イベントの送信抑制
+let pendingRate = 1;         // プレーヤー準備前に受信した再生速度
+let captionsOn = false;      // 字幕表示状態(全員同期)
+let joinMuted = false;       // 途中参加時のミュート自動再生フラグ
+let lastPolledTime = null;
+let lastPlayerState = -1;
+const POLL_MS = 500;
+const QUEUE_KEY = "ytsync-queue";
+const RELAY_TYPES = new Set(["play", "pause", "seek", "load", "queue", "rate", "captions"]);
+
+const $ = (id) => document.getElementById(id);
+
+/* ====================== ユーティリティ ====================== */
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+function genCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function parseVideoId(url) {
+  url = url.trim();
+  const m = url.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(url)) return url;
+  return null;
+}
+
+async function fetchTitle(videoId) {
+  try {
+    const r = await fetch("https://noembed.com/embed?url=" +
+      encodeURIComponent("https://www.youtube.com/watch?v=" + videoId));
+    const j = await r.json();
+    return j.title || videoId;
+  } catch (e) {
+    return videoId;
+  }
+}
+
+function suppress(ms = 1200) { suppressUntil = Date.now() + ms; }
+function isSuppressed() { return Date.now() < suppressUntil; }
+function suppressRate(ms = 1200) { suppressRateUntil = Date.now() + ms; }
+function isRateSuppressed() { return Date.now() < suppressRateUntil; }
+function currentRate() {
+  return (playerReady && player.getPlaybackRate) ? player.getPlaybackRate() : pendingRate;
+}
+
+/* 伝送遅延の見積り(秒): 中継分(msg.lag) + 最終ホップ(RTT/2) */
+function lagOf(msg, fromConn) {
+  const hop = (fromConn && fromConn._rtt) ? fromConn._rtt / 2000 : 0;
+  return Math.min((msg.lag || 0) + hop, 3); // 異常値は3秒で頭打ち
+}
+
+/* キューの永続化 */
+function saveQueue() {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); } catch (e) {}
+}
+
+/* 字幕の適用(非公式APIのためtry-catchで保護) */
+function applyCaptions(on) {
+  if (!playerReady) return;
+  try {
+    if (on) {
+      player.loadModule("captions"); // HTML5プレーヤー
+      player.loadModule("cc");       // 旧プレーヤー互換
+    } else {
+      player.unloadModule("captions");
+      player.unloadModule("cc");
+    }
+  } catch (e) { /* 非対応動画では無視 */ }
+}
+
+function setCaptions(on, fromRemote) {
+  captionsOn = on;
+  const btn = $("btnCC");
+  btn.textContent = "字幕: " + (on ? "ON" : "OFF");
+  btn.classList.toggle("ccon", on);
+  applyCaptions(on);
+  if (!fromRemote) broadcast({ type: "captions", on });
+}
+
+/* ====================== 通信 ====================== */
+function sendAll(msg, exclude) {
+  for (const c of connections) {
+    if (c !== exclude && c.open) c.send(msg);
+  }
+}
+
+function broadcast(msg) { sendAll(msg); }
+
+function fullState() {
+  return {
+    type: "state",
+    queue, index: currentIndex,
+    time: playerReady && player.getCurrentTime ? player.getCurrentTime() : 0,
+    playing: playerReady && player.getPlayerState && player.getPlayerState() === YT.PlayerState.PLAYING,
+    rate: currentRate(),
+    captions: captionsOn
+  };
+}
+
+function broadcastRoster() {
+  roster = connections.filter(c => c.open).map(c => c.peer);
+  sendAll({ type: "roster", list: roster });
+}
+
+function setupConnection(conn) {
+  conn.on("open", () => {
+    connections.push(conn);
+    updatePeerCount();
+    /* RTT計測ping(8秒ごと) */
+    conn._rtt = 0;
+    conn.send({ type: "ping", t: Date.now() });
+    conn._pingTimer = setInterval(() => {
+      if (conn.open) conn.send({ type: "ping", t: Date.now() });
+    }, 8000);
+    if (isHost) {
+      conn.send(fullState());
+      broadcastRoster();
+      toast("参加者が接続しました");
+    }
+  });
+  conn.on("data", (msg) => handleMessage(msg, conn));
+  conn.on("close", () => dropConnection(conn));
+  conn.on("error", () => dropConnection(conn));
+}
+
+function dropConnection(conn) {
+  if (conn._dropped) return;
+  conn._dropped = true;
+  clearInterval(conn._pingTimer);
+  connections = connections.filter(c => c !== conn);
+  updatePeerCount();
+  if (isHost) {
+    toast("参加者が退出しました");
+    broadcastRoster();
+  } else {
+    handleHostLost();
+  }
+}
+
+/* ====================== ホスト切断対策 ====================== */
+function handleHostLost() {
+  if (!joined || migrating || isHost) return;
+  migrating = true;
+  updatePeerCount();
+  const successor = roster[0];
+  if (successor && successor === peer.id) {
+    toast("ホストが切断しました。ホスト権限を引き継いでいます...");
+    setTimeout(becomeHost, 1500); // 旧ホストIDの解放を待つ
+  } else {
+    toast("ホストが切断しました。再接続しています...");
+    setTimeout(() => reconnectToHost(0), 3000); // 新ホストの起動を待つ
+  }
+}
+
+function becomeHost() {
+  try { peer.destroy(); } catch (e) {}
+  peer = new Peer(PREFIX + roomCode, { debug: 1 });
+  peer.on("open", () => {
+    isHost = true;
+    migrating = false;
+    connections = [];
+    roster = [];
+    updatePeerCount();
+    startHostSync();
+    toast("あなたが新しいホストになりました");
+  });
+  peer.on("connection", (conn) => setupConnection(conn));
+  peer.on("disconnected", () => { try { peer.reconnect(); } catch (e) {} });
+  peer.on("error", (err) => {
+    if (err.type === "unavailable-id") setTimeout(becomeHost, 2000); // 解放待ちリトライ
+  });
+}
+
+function reconnectToHost(attempt) {
+  if (isHost || !migrating) return;
+  if (attempt >= 10) {
+    migrating = false;
+    toast("再接続に失敗しました。ページを再読み込みしてください。");
+    return;
+  }
+  const conn = peer.connect(PREFIX + roomCode, { reliable: true });
+  const timer = setTimeout(() => {
+    try { conn.close(); } catch (e) {}
+    reconnectToHost(attempt + 1);
+  }, 4000);
+  conn.on("open", () => {
+    clearTimeout(timer);
+    migrating = false;
+    toast("再接続しました");
+  });
+  setupConnection(conn);
+}
+
+/* ====================== メッセージ処理 ====================== */
+function handleMessage(msg, fromConn) {
+  /* RTT計測(中継しない) */
+  if (msg.type === "ping") {
+    if (fromConn && fromConn.open) fromConn.send({ type: "pong", t: msg.t });
+    return;
+  }
+  if (msg.type === "pong") {
+    if (fromConn) fromConn._rtt = Date.now() - msg.t;
+    return;
+  }
+
+  /* ホストは他のゲストへ中継(時刻系は中継遅延を加算) */
+  if (isHost && RELAY_TYPES.has(msg.type)) {
+    if ((msg.type === "play" || msg.type === "seek") && fromConn && fromConn._rtt) {
+      msg.lag = (msg.lag || 0) + fromConn._rtt / 2000;
+    }
+    sendAll(msg, fromConn);
+  }
+
+  switch (msg.type) {
+    case "state": {
+      queue = msg.queue || [];
+      currentIndex = msg.index;
+      pendingRate = msg.rate || 1;
+      if (typeof msg.captions === "boolean") setCaptions(msg.captions, true);
+      renderQueue();
+      const item = currentIndex >= 0 ? queue[currentIndex] : null;
+      if (!item) break;
+      const t = (msg.time || 0) + (msg.playing ? lagOf(msg, fromConn) * pendingRate : 0);
+      if (player && playerReady && currentVideoId === item.id) {
+        /* 同じ動画なら再読み込みせず位置・状態だけ合わせる(ホスト交代時の途切れ防止) */
+        suppress(2000);
+        if (Math.abs(player.getCurrentTime() - t) > 1.5) player.seekTo(t, true);
+        if (msg.playing) player.playVideo(); else player.pauseVideo();
+        suppressRate();
+        player.setPlaybackRate(pendingRate);
+      } else {
+        if (msg.playing && !player) joinMuted = true; // 途中参加: ミュートで自動再生
+        loadVideo(currentIndex, t, msg.playing, true);
+      }
+      break;
+    }
+    case "roster":
+      roster = msg.list || [];
+      break;
+    case "rate":
+      pendingRate = msg.rate;
+      if (playerReady) { suppressRate(); player.setPlaybackRate(msg.rate); }
+      break;
+    case "captions":
+      setCaptions(msg.on, true);
+      break;
+    case "play": {
+      if (!playerReady) break;
+      suppress();
+      const t = msg.time + lagOf(msg, fromConn) * currentRate();
+      if (Math.abs(player.getCurrentTime() - t) > 1.5) player.seekTo(t, true);
+      player.playVideo();
+      break;
+    }
+    case "pause":
+      if (!playerReady) break;
+      suppress();
+      player.pauseVideo();
+      if (Math.abs(player.getCurrentTime() - msg.time) > 1.5) player.seekTo(msg.time, true);
+      break;
+    case "seek": {
+      if (!playerReady) break;
+      suppress();
+      const playing = player.getPlayerState() === YT.PlayerState.PLAYING;
+      player.seekTo(msg.time + (playing ? lagOf(msg, fromConn) * currentRate() : 0), true);
+      break;
+    }
+    case "load":
+      currentIndex = msg.index;
+      renderQueue();
+      loadVideo(msg.index, msg.time || 0, true, true);
+      break;
+    case "queue":
+      queue = msg.queue;
+      currentIndex = msg.index;
+      renderQueue();
+      break;
+    case "timesync": { // ホストからの定期同期(再生中のみ補正)
+      if (!playerReady || isHost) break;
+      if (msg.rate && Math.abs(currentRate() - msg.rate) > 0.01) {
+        pendingRate = msg.rate;
+        suppressRate();
+        player.setPlaybackRate(msg.rate);
+      }
+      const t = msg.time + lagOf(msg, fromConn) * currentRate();
+      if (msg.playing && player.getPlayerState() === YT.PlayerState.PLAYING &&
+          Math.abs(player.getCurrentTime() - t) > 2.5 && !isSuppressed()) {
+        suppress();
+        player.seekTo(t, true);
+      }
+      break;
+    }
+  }
+}
+
+function updatePeerCount() {
+  const n = connections.filter(c => c.open).length;
+  $("peerCount").textContent = isHost
+    ? `参加者: ${n}人`
+    : (n > 0 ? "接続中" : (migrating ? "再接続中..." : "切断"));
+}
+
+/* ====================== ロビー ====================== */
+function initPeer(code, asHost) {
+  $("lobbyStatus").textContent = "接続中...";
+  $("btnCreate").disabled = true;
+  $("btnJoin").disabled = true;
+
+  const id = asHost ? PREFIX + code : undefined;
+  peer = new Peer(id, { debug: 1 });
+
+  peer.on("open", () => {
+    roomCode = code;
+    isHost = asHost;
+    if (asHost) {
+      enterRoom();
+    } else {
+      const conn = peer.connect(PREFIX + code, { reliable: true });
+      const timer = setTimeout(() => {
+        if (!conn.open) {
+          $("lobbyStatus").textContent = "ルームが見つかりません。IDを確認してください。";
+          $("btnCreate").disabled = false;
+          $("btnJoin").disabled = false;
+          peer.destroy(); peer = null;
+        }
+      }, 8000);
+      conn.on("open", () => { clearTimeout(timer); enterRoom(); });
+      setupConnection(conn);
+    }
+  });
+
+  peer.on("connection", (conn) => { if (isHost) setupConnection(conn); });
+  peer.on("disconnected", () => { try { peer.reconnect(); } catch (e) {} });
+
+  peer.on("error", (err) => {
+    if (joined) return; // 入室後のエラーは再接続処理に任せる
+    if (err.type === "unavailable-id") {
+      $("lobbyStatus").textContent = "このルームIDは使用中です。再度作成してください。";
+    } else if (err.type === "peer-unavailable") {
+      $("lobbyStatus").textContent = "ルームが見つかりません。IDを確認してください。";
+    } else {
+      $("lobbyStatus").textContent = "接続エラー: " + err.type;
+    }
+    $("btnCreate").disabled = false;
+    $("btnJoin").disabled = false;
+  });
+}
+
+function enterRoom() {
+  joined = true;
+  $("lobby").style.display = "none";
+  $("main").style.display = "block";
+  $("roomBadge").textContent = roomCode;
+  updatePeerCount();
+  history.replaceState(null, "", "#" + roomCode);
+
+  /* ホストのみ: 前回の再生リストを復元 */
+  if (isHost && queue.length === 0) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
+      if (Array.isArray(saved) && saved.length) {
+        queue = saved;
+        renderQueue();
+        toast("前回の再生リストを復元しました(タイトルをクリックで再生)");
+      }
+    } catch (e) {}
+  }
+}
+
+$("btnCreate").onclick = () => initPeer(genCode(), true);
+$("btnJoin").onclick = () => {
+  const code = $("joinInput").value.trim().toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(code)) { $("lobbyStatus").textContent = "6桁のルームIDを入力してください"; return; }
+  initPeer(code, false);
+};
+$("joinInput").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").click(); });
+
+$("roomBadge").onclick = () => {
+  navigator.clipboard.writeText(roomCode).then(() => toast("ルームIDをコピーしました"));
+};
+
+$("btnInvite").onclick = () => {
+  const url = location.origin + location.pathname + "#" + roomCode;
+  navigator.clipboard.writeText(url).then(() => toast("招待リンクをコピーしました: " + url));
+};
+
+// URLハッシュにルームIDがあれば自動入力
+if (location.hash.length === 7) $("joinInput").value = location.hash.slice(1).toUpperCase();
+
+/* ====================== YouTube プレーヤー ====================== */
+let ytApiReady = false;
+let pendingLoad = null; // [index, time, autoplay]
+
+function onYouTubeIframeAPIReady() {
+  ytApiReady = true;
+  if (pendingLoad) { createPlayer(...pendingLoad); pendingLoad = null; }
+}
+window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+
+(function loadYT() {
+  const tag = document.createElement("script");
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(tag);
+})();
+
+function createPlayer(index, startTime, autoplay) {
+  const item = queue[index];
+  if (!item) return;
+  $("playerEmpty").style.display = "none";
+  currentVideoId = item.id;
+  player = new YT.Player("player", {
+    videoId: item.id,
+    playerVars: { autoplay: autoplay ? 1 : 0, start: Math.floor(startTime), playsinline: 1, cc_lang_pref: "ja" },
+    events: {
+      onReady: () => {
+        playerReady = true;
+        lastPolledTime = null;
+        if (Math.abs(pendingRate - 1) > 0.01) { suppressRate(); player.setPlaybackRate(pendingRate); }
+        if (captionsOn) applyCaptions(true);
+        if (joinMuted) {
+          player.mute();
+          $("btnUnmute").hidden = false;
+        }
+        startPolling();
+        if (autoplay) player.playVideo();
+      },
+      onStateChange: onPlayerStateChange,
+      onError: onPlayerError,
+      onPlaybackRateChange: (e) => {
+        pendingRate = e.data;
+        if (!isRateSuppressed()) broadcast({ type: "rate", rate: e.data });
+      }
+    }
+  });
+  $("nowTitle").textContent = "▶ " + (item.title || item.id);
+}
+
+$("btnUnmute").onclick = () => {
+  if (playerReady) player.unMute();
+  $("btnUnmute").hidden = true;
+  joinMuted = false;
+};
+
+function loadVideo(index, startTime = 0, autoplay = true, fromRemote = false) {
+  currentIndex = index;
+  renderQueue();
+  const item = queue[index];
+  if (!item) return;
+  if (fromRemote) suppress(2000);
+  if (!player) {
+    if (!ytApiReady) { pendingLoad = [index, startTime, autoplay]; return; }
+    createPlayer(index, startTime, autoplay);
+  } else {
+    lastPolledTime = null;
+    currentVideoId = item.id;
+    if (autoplay) player.loadVideoById(item.id, startTime);
+    else player.cueVideoById(item.id, startTime);
+    $("nowTitle").textContent = "▶ " + (item.title || item.id);
+  }
+}
+
+/* 再生不可動画のエラー処理 */
+const YT_ERRORS = {
+  2:   "無効な動画IDです",
+  5:   "このプレーヤーでは再生できない動画です",
+  100: "動画が見つかりません(削除済みまたは非公開)",
+  101: "埋め込み再生が許可されていない動画です",
+  150: "埋め込み再生が許可されていない動画です"
+};
+
+function onPlayerError(e) {
+  const reason = YT_ERRORS[e.data] || "この動画は再生できません";
+  if (!isHost) {
+    // ゲスト側のみのエラー(地域制限など)では全体をスキップしない
+    toast(reason + "(地域制限の可能性があります)");
+    return;
+  }
+  if (currentIndex < queue.length - 1) {
+    toast(reason + " — 5秒後に次の動画へスキップします");
+    const erroredIndex = currentIndex;
+    clearTimeout(onPlayerError._timer);
+    onPlayerError._timer = setTimeout(() => {
+      if (currentIndex !== erroredIndex) return; // 既に手動で切替済みなら何もしない
+      const next = erroredIndex + 1;
+      loadVideo(next, 0, true);
+      broadcast({ type: "load", index: next, time: 0 });
+    }, 5000);
+  } else {
+    toast(reason);
+  }
+}
+
+function onPlayerStateChange(e) {
+  const s = e.data;
+  if (s === YT.PlayerState.ENDED) {
+    // 自動で次へ(ホストのみが進行役。レース回避)
+    if (isHost && currentIndex < queue.length - 1) {
+      const next = currentIndex + 1;
+      loadVideo(next, 0, true);
+      broadcast({ type: "load", index: next, time: 0 });
+    }
+    lastPlayerState = s;
+    return;
+  }
+  // 動画切替後も字幕状態を維持(loadModuleは冪等)
+  if (s === YT.PlayerState.PLAYING && captionsOn) applyCaptions(true);
+  if (!isSuppressed()) {
+    if (s === YT.PlayerState.PLAYING && lastPlayerState !== YT.PlayerState.PLAYING) {
+      broadcast({ type: "play", time: player.getCurrentTime() });
+    } else if (s === YT.PlayerState.PAUSED) {
+      broadcast({ type: "pause", time: player.getCurrentTime() });
+    }
+  }
+  if (s === YT.PlayerState.PLAYING || s === YT.PlayerState.PAUSED) lastPlayerState = s;
+}
+
+/* シーク検知ポーリング */
+let pollTimer = null;
+let hostSyncTimer = null;
+
+function startPolling() {
+  if (!pollTimer) {
+    pollTimer = setInterval(() => {
+      if (!playerReady || !player.getCurrentTime) return;
+      const t = player.getCurrentTime();
+      const state = player.getPlayerState();
+      if (lastPolledTime !== null) {
+        const drift = state === YT.PlayerState.PLAYING ? (POLL_MS / 1000) * currentRate() : 0;
+        const expected = lastPolledTime + drift;
+        if (Math.abs(t - expected) > 1.5 && !isSuppressed()) {
+          broadcast({ type: "seek", time: t });
+        }
+      }
+      lastPolledTime = t;
+    }, POLL_MS);
+  }
+  if (isHost) startHostSync();
+}
+
+/* ホスト: 5秒ごとに時刻同期を配信(ホスト引き継ぎ時にも呼ばれる) */
+function startHostSync() {
+  if (hostSyncTimer) return;
+  hostSyncTimer = setInterval(() => {
+    if (!isHost || !playerReady || connections.length === 0) return;
+    broadcast({
+      type: "timesync",
+      time: player.getCurrentTime(),
+      playing: player.getPlayerState() === YT.PlayerState.PLAYING,
+      rate: currentRate()
+    });
+  }, 5000);
+}
+
+/* ====================== キュー ====================== */
+function renderQueue() {
+  const ul = $("queueList");
+  ul.innerHTML = "";
+  $("queueEmpty").style.display = queue.length ? "none" : "block";
+  saveQueue();
+  queue.forEach((item, i) => {
+    const li = document.createElement("li");
+    li.draggable = true;
+    li.dataset.index = i;
+    if (i === currentIndex) li.classList.add("playing");
+
+    const grip = document.createElement("span");
+    grip.className = "grip"; grip.textContent = "⠿";
+
+    const thumb = document.createElement("img");
+    thumb.className = "thumb";
+    thumb.src = "https://img.youtube.com/vi/" + item.id + "/default.jpg";
+    thumb.alt = "";
+    thumb.loading = "lazy";
+    thumb.draggable = false;
+
+    const title = document.createElement("span");
+    title.className = "qtitle";
+    title.textContent = (i === currentIndex ? "▶ " : "") + (item.title || item.id);
+    title.title = "クリックで再生";
+    title.onclick = () => {
+      loadVideo(i, 0, true);
+      broadcast({ type: "load", index: i, time: 0 });
+    };
+
+    const del = document.createElement("button");
+    del.className = "del"; del.textContent = "✕"; del.title = "削除";
+    del.onclick = () => {
+      queue.splice(i, 1);
+      if (i < currentIndex) currentIndex--;
+      else if (i === currentIndex) currentIndex = Math.min(currentIndex, queue.length - 1);
+      renderQueue();
+      broadcast({ type: "queue", queue, index: currentIndex });
+    };
+
+    li.append(grip, thumb, title, del);
+
+    /* ドラッグ&ドロップ並び替え */
+    li.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", String(i));
+      e.dataTransfer.effectAllowed = "move";
+    });
+    li.addEventListener("dragover", (e) => { e.preventDefault(); li.classList.add("dragover"); });
+    li.addEventListener("dragleave", () => li.classList.remove("dragover"));
+    li.addEventListener("drop", (e) => {
+      e.preventDefault();
+      li.classList.remove("dragover");
+      const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+      const to = i;
+      if (isNaN(from) || from === to) return;
+      const playingItem = queue[currentIndex];
+      const [moved] = queue.splice(from, 1);
+      queue.splice(to, 0, moved);
+      currentIndex = queue.indexOf(playingItem);
+      renderQueue();
+      broadcast({ type: "queue", queue, index: currentIndex });
+    });
+
+    ul.appendChild(li);
+  });
+}
+
+async function addUrl() {
+  const input = $("urlInput");
+  const id = parseVideoId(input.value);
+  if (!id) { toast("有効なYouTube動画URLを入力してください"); return; }
+  input.value = "";
+  const item = { id, title: id };
+  queue.push(item);
+  renderQueue();
+  const wasEmpty = queue.length === 1 && currentIndex === -1;
+  if (wasEmpty) {
+    loadVideo(0, 0, true);
+    broadcast({ type: "load", index: 0, time: 0 });
+  }
+  broadcast({ type: "queue", queue, index: currentIndex });
+
+  // タイトルを非同期取得して更新
+  item.title = await fetchTitle(id);
+  renderQueue();
+  if (currentIndex === queue.indexOf(item)) $("nowTitle").textContent = "▶ " + item.title;
+  broadcast({ type: "queue", queue, index: currentIndex });
+}
+
+$("btnCC").onclick = () => setCaptions(!captionsOn, false);
+$("btnAdd").onclick = addUrl;
+$("urlInput").addEventListener("keydown", e => { if (e.key === "Enter") addUrl(); });
+/* v2.0: ホスト引き継ぎ / ミュート自動再生 / 遅延補正 / サムネイル / キュー永続化 / 招待リンク */
+</script>
+</body>
+</html>
