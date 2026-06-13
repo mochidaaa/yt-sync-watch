@@ -245,6 +245,7 @@ let pendingRate = 1;         // プレーヤー準備前に受信した再生速
 let captionsOn = false;      // 字幕表示状態(全員同期)
 let captionsApplied = false; // 現在の動画に字幕を適用済みか(動画ごとに1回だけ適用)
 let noCaptionNotified = false; // 字幕無し通知を出したか(動画ごとに1回)
+let pendingRemoteLoad = null; // queue未着で空振りした遠隔loadの保留 {index, time}
 let joinMuted = false;       // 途中参加時のミュート自動再生フラグ
 let lastPolledTime = null;
 let lastPlayerState = -1;
@@ -552,6 +553,7 @@ function handleMessage(msg, fromConn) {
       queue = msg.queue;
       currentIndex = msg.index;
       renderQueue();
+      applyPendingRemoteLoad();   // 先行していた load の保留があればここで適用
       break;
     case "timesync": { // ホストからの定期同期(再生中のみ補正)
       if (!playerReady || isHost) break;
@@ -752,7 +754,11 @@ function loadVideo(index, startTime = 0, autoplay = true, fromRemote = false) {
   currentIndex = index;
   renderQueue();
   const item = queue[index];
-  if (!item) return;
+  if (!item) {
+    // 遠隔の再生指示がキュー未着で空振りしないよう保留 → queue到着時に適用
+    if (fromRemote) pendingRemoteLoad = { index, time: startTime };
+    return;
+  }
   if (fromRemote) suppress(2000);
   if (!player) {
     if (!ytApiReady) { pendingLoad = [index, startTime, autoplay]; return; }
@@ -770,6 +776,17 @@ function loadVideo(index, startTime = 0, autoplay = true, fromRemote = false) {
     }
     $("nowTitle").textContent = "▶ " + (item.title || item.id);
   }
+}
+
+/* 遠隔の load がキュー未着で空振りした場合、queue到着後に適用する(順序前後への保険) */
+function applyPendingRemoteLoad() {
+  if (!pendingRemoteLoad) return;
+  const item = queue[pendingRemoteLoad.index];
+  if (!item) return;                                 // まだ無ければ次のqueueを待つ
+  const p = pendingRemoteLoad;
+  pendingRemoteLoad = null;
+  if (player && currentVideoId === item.id) return;  // 既に同じ動画を再生中なら不要(並び替え等)
+  loadVideo(p.index, p.time || 0, true, true);
 }
 
 /* 再生不可動画のエラー処理 */
@@ -957,11 +974,13 @@ async function addUrl() {
   queue.push(item);
   renderQueue();
   const wasEmpty = queue.length === 1 && currentIndex === -1;
+  // 先にキュー内容を配信する。これより前に load を送ると、空キューのゲストが
+  // queue[index] を解決できず空振りするため、必ず queue を先に届ける。
+  broadcast({ type: "queue", queue, index: wasEmpty ? 0 : currentIndex });
   if (wasEmpty) {
-    loadVideo(0, 0, true);
-    broadcast({ type: "load", index: 0, time: 0 });
+    loadVideo(0, 0, true);                          // ホスト自身が再生(currentIndex=0)
+    broadcast({ type: "load", index: 0, time: 0 }); // 再生指示は queue の後
   }
-  broadcast({ type: "queue", queue, index: currentIndex });
 
   // タイトルを非同期取得して更新
   item.title = await fetchTitle(id);
@@ -989,6 +1008,7 @@ $("urlInput").addEventListener("keydown", e => { if (e.key === "Enter") addUrl()
 /* v2.4: 再生中タイトル下に「次の動画 »」ボタン追加(全員同期・末尾で無効化) */
 /* v2.5: UIをBento Soft(大きな角丸カード×エメラルド)に刷新 — 機能は不変 */
 /* v2.6: 字幕の信頼性改善 — トラック明示選択/動画ごと1回適用/cc_load_policy/字幕無し通知 */
+/* v2.7: 入室済みゲストで初回再生が始まらない不具合を修正 — queueをloadより先に送信＋load保留ガード */
 </script>
 </body>
 </html>
