@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube 同時視聴</title>
+<title>YouTube SyncWatch v2.8</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <style>
   :root {
@@ -989,12 +989,15 @@ async function addUrl() {
   broadcast({ type: "queue", queue, index: currentIndex });
 }
 
-/* 次の動画へ(タイトルクリックと同じく誰でも操作可・全員に同期) */
+/* 次の動画へ(誰でも操作可・全員に同期)。再生中の動画はキューから削除する */
 function playNext() {
-  if (currentIndex < 0 || currentIndex >= queue.length - 1) return; // 末尾なら何もしない
-  const next = currentIndex + 1;
-  loadVideo(next, 0, true);
-  broadcast({ type: "load", index: next, time: 0 });
+  if (currentIndex < 0 || currentIndex >= queue.length - 1) return; // 次が無ければ何もしない
+  const cur = currentIndex;
+  queue.splice(cur, 1);                            // 再生中の動画を削除
+  // 削除により、次の動画が同じ位置(cur)へ繰り上がる
+  broadcast({ type: "queue", queue, index: cur }); // 先にキュー内容を配信
+  loadVideo(cur, 0, true);                         // 繰り上がった次の動画を再生
+  broadcast({ type: "load", index: cur, time: 0 }); // 再生指示は queue の後
 }
 
 $("btnCC").onclick = () => setCaptions(!captionsOn, false);
@@ -1009,6 +1012,7 @@ $("urlInput").addEventListener("keydown", e => { if (e.key === "Enter") addUrl()
 /* v2.5: UIをBento Soft(大きな角丸カード×エメラルド)に刷新 — 機能は不変 */
 /* v2.6: 字幕の信頼性改善 — トラック明示選択/動画ごと1回適用/cc_load_policy/字幕無し通知 */
 /* v2.7: 入室済みゲストで初回再生が始まらない不具合を修正 — queueをloadより先に送信＋load保留ガード */
+/* v2.8: 「次の動画」ボタンで進む際、再生中の動画をキューから削除(全員同期) */
 </script>
 </body>
 </html>
