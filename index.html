@@ -7,120 +7,161 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <style>
   :root {
-    --bg: #0f0f13; --panel: #1a1a22; --panel2: #23232e;
-    --accent: #ff4757; --accent2: #5352ed; --text: #eaeaf0; --sub: #9a9aac;
-    --radius: 12px;
+    /* Bento Soft (dark) — 大きな角丸カード × エメラルド × クリーンなサンセリフ */
+    --bg: #0f1115;          /* ページ背景(濃いチャコール) */
+    --panel: #1b1e24;       /* カード面 */
+    --panel2: #232730;      /* 入れ子(入力欄/キュー行) */
+    --line: rgba(255,255,255,.08);   /* 細い境界(既定) */
+    --line2: rgba(255,255,255,.16);  /* 境界(強調/フォーカス) */
+    --accent: #34d399;      /* エメラルド */
+    --accent-soft: rgba(52,211,153,.10); /* アクセントの薄い面 */
+    --on-accent: #07120d;   /* アクセント上の濃い文字 */
+    --text: #e7eaee;
+    --sub: #9aa1ac;
+    --radius: 18px;         /* カード */
+    --radius-sm: 12px;      /* 入れ子要素 */
+    --radius-btn: 10px;     /* ボタン */
+    --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    --shadow: 0 8px 28px rgba(0,0,0,.38);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg); color: var(--text);
-    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    font-family: var(--sans);
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
   }
   /* ---------- Lobby ---------- */
   #lobby {
     display: flex; flex-direction: column; align-items: center;
-    justify-content: center; min-height: 100vh; gap: 24px; padding: 20px;
+    justify-content: center; min-height: 100vh; gap: 22px; padding: 24px;
   }
-  #lobby h1 { font-size: 1.9rem; }
+  #lobby h1 {
+    font-weight: 600; font-size: 2rem; letter-spacing: -.01em; line-height: 1.25;
+  }
   #lobby h1 span { color: var(--accent); }
   .card {
-    background: var(--panel); border-radius: var(--radius);
-    padding: 28px; width: 100%; max-width: 420px;
-    display: flex; flex-direction: column; gap: 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px; width: 100%; max-width: 420px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px;
   }
-  .card h2 { font-size: 1.05rem; color: var(--sub); font-weight: 600; }
+  .card h2 {
+    font-size: .9rem; color: var(--sub); font-weight: 500; letter-spacing: .01em;
+  }
   input[type=text] {
-    background: var(--panel2); border: 1px solid #333344; color: var(--text);
-    border-radius: 8px; padding: 11px 14px; font-size: 0.95rem; width: 100%;
-    outline: none;
+    background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+    border-radius: var(--radius-btn); padding: 12px 14px; font-size: 0.95rem; width: 100%;
+    outline: none; font-family: var(--sans); transition: border-color .15s, box-shadow .15s;
   }
-  input[type=text]:focus { border-color: var(--accent2); }
+  input[type=text]::placeholder { color: var(--sub); }
+  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   button {
-    background: var(--accent); color: #fff; border: none; border-radius: 8px;
-    padding: 11px 18px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
-    transition: opacity .15s;
+    background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--radius-btn);
+    padding: 12px 18px; font-size: 0.92rem; font-weight: 600; letter-spacing: .01em;
+    cursor: pointer; transition: filter .15s, background .15s, border-color .15s;
+    font-family: var(--sans);
   }
-  button:hover { opacity: .85; }
-  button.secondary { background: var(--accent2); }
-  button.ghost { background: var(--panel2); color: var(--text); }
-  button:disabled { opacity: .4; cursor: default; }
+  button:hover { filter: brightness(1.08); }
+  /* 控えめなソフトボタン(主役のCreate/Next/追加は塗りで強調) */
+  button.secondary, button.ghost {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+  }
+  button.secondary:hover, button.ghost:hover { filter: none; background: #2b303b; border-color: var(--line2); }
+  button:disabled { opacity: .4; cursor: default; filter: none; }
   #lobbyStatus { color: var(--sub); font-size: .85rem; min-height: 1.2em; text-align: center; }
 
   /* ---------- Main ---------- */
-  #main { display: none; padding: 16px; max-width: 1280px; margin: 0 auto; }
+  #main { display: none; padding: 22px 18px; max-width: 1240px; margin: 0 auto; }
   #topbar {
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 20px;
   }
-  #topbar .title { font-weight: 700; font-size: 1.1rem; }
+  #topbar .title { font-weight: 600; font-size: 1.15rem; letter-spacing: -.01em; }
   #topbar .title span { color: var(--accent); }
   #roomBadge {
-    background: var(--panel2); border-radius: 8px; padding: 7px 12px;
-    font-family: monospace; font-size: 1rem; letter-spacing: 2px; cursor: pointer;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius-btn); padding: 7px 12px;
+    font-family: monospace; font-size: .95rem; letter-spacing: 2px; cursor: pointer;
+    color: var(--text); transition: border-color .15s, background .15s;
   }
-  #roomBadge:hover { background: #2d2d3a; }
+  #roomBadge:hover { background: #2b303b; border-color: var(--accent); }
   #btnInvite { padding: 7px 14px; font-size: .82rem; }
   #peerCount { color: var(--sub); font-size: .85rem; }
-  #layout { display: flex; gap: 16px; align-items: flex-start; }
+  #layout { display: flex; gap: 20px; align-items: flex-start; }
   #playerWrap { flex: 1; min-width: 0; }
   #playerBox {
     position: relative; width: 100%; aspect-ratio: 16/9;
-    background: #000; border-radius: var(--radius); overflow: hidden;
+    background: #000; border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden; box-shadow: var(--shadow);
   }
   #playerBox iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
   #playerEmpty {
     position: absolute; inset: 0; display: flex; align-items: center;
-    justify-content: center; color: var(--sub); font-size: .95rem;
+    justify-content: center; color: var(--sub); font-size: 1rem;
   }
   #btnUnmute {
-    position: absolute; top: 12px; left: 12px; z-index: 5;
-    background: var(--accent); font-size: .85rem; box-shadow: 0 2px 10px rgba(0,0,0,.5);
+    position: absolute; top: 14px; left: 14px; z-index: 5;
+    background: var(--accent); color: var(--on-accent); font-size: .85rem;
   }
-  #nowTitle { margin-top: 10px; font-size: .95rem; color: var(--text); min-height: 1.3em; }
-  #controlsRow { margin-top: 8px; display: flex; gap: 8px; }
-  #btnCC { padding: 6px 14px; font-size: .8rem; }
-  #btnCC.ccon { background: var(--accent2); color: #fff; }
-  #syncNote { margin-top: 6px; color: var(--sub); font-size: .78rem; }
+  /* タイトル(左) とボタン(右) を動画直下の横一列に — ソフトカードで包む */
+  #nowBar {
+    margin-top: 12px; display: flex; align-items: center; gap: 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 10px 14px;
+  }
+  #nowTitle {
+    flex: 1; min-width: 0; font-size: 1.02rem; font-weight: 500; color: var(--text);
+    min-height: 1.3em; line-height: 1.5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #controlsRow { flex-shrink: 0; display: flex; gap: 8px; }
+  #btnCC { padding: 7px 14px; font-size: .8rem; }
+  #btnCC.ccon { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  #btnNext { padding: 7px 14px; font-size: .8rem; letter-spacing: .02em; display: inline-flex; align-items: center; gap: 6px; }
+  #btnNext .chev { font-family: monospace; font-size: 1.05rem; line-height: 1; }
 
   /* ---------- Queue ---------- */
   #queuePanel {
-    width: 360px; flex-shrink: 0; background: var(--panel);
-    border-radius: var(--radius); padding: 16px;
-    display: flex; flex-direction: column; gap: 12px;
-    max-height: calc(100vh - 110px);
+    width: 340px; flex-shrink: 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
+    display: flex; flex-direction: column; gap: 14px; box-shadow: var(--shadow);
+    max-height: calc(100vh - 130px);
   }
-  #queuePanel h2 { font-size: .95rem; color: var(--sub); }
+  #queuePanel h2 { font-size: 1rem; color: var(--text); font-weight: 600; letter-spacing: -.01em; }
   #addRow { display: flex; gap: 8px; }
   #addRow input { flex: 1; }
-  #queueList { list-style: none; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  #queueList { list-style: none; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
   #queueList li {
-    background: var(--panel2); border-radius: 8px; padding: 7px 8px;
-    display: flex; align-items: center; gap: 8px; cursor: grab;
-    border: 1px solid transparent; font-size: .85rem;
+    background: var(--panel2); border: 1px solid transparent; border-radius: var(--radius-sm);
+    padding: 8px; display: flex; align-items: center; gap: 10px; cursor: grab;
+    font-size: .86rem; transition: border-color .15s, background .15s;
   }
-  #queueList li.playing { border-color: var(--accent); }
-  #queueList li.dragover { border-color: var(--accent2); }
+  #queueList li:hover { border-color: var(--line2); }
+  #queueList li.playing { border-color: var(--accent); background: var(--accent-soft); }
+  #queueList li.playing .qtitle { color: var(--accent); }
+  #queueList li.dragover { border-color: var(--accent); background: rgba(52,211,153,.16); }
   #queueList li .grip { color: var(--sub); cursor: grab; user-select: none; }
   #queueList li .thumb {
-    width: 60px; height: 34px; object-fit: cover; border-radius: 4px;
+    width: 56px; height: 32px; object-fit: cover; border-radius: 8px;
     flex-shrink: 0; background: #000;
   }
   #queueList li .qtitle {
     flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+    transition: color .15s;
   }
   #queueList li .qtitle:hover { color: var(--accent); }
   #queueList li .del {
-    background: none; color: var(--sub); padding: 2px 6px; font-size: 1rem;
+    background: none; color: var(--sub); padding: 2px 6px; font-size: 1rem; border: none;
   }
-  #queueList li .del:hover { color: var(--accent); }
-  #queueEmpty { color: var(--sub); font-size: .82rem; text-align: center; padding: 12px 0; }
+  #queueList li .del:hover { color: var(--accent); background: none; border: none; filter: none; }
+  #queueEmpty { color: var(--sub); font-size: .85rem; text-align: center; padding: 16px 0; }
   #toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: var(--panel2); padding: 10px 20px; border-radius: 8px;
+    background: var(--panel); padding: 11px 20px; border-radius: var(--radius-sm);
     font-size: .85rem; opacity: 0; transition: opacity .3s; pointer-events: none;
-    border: 1px solid #333344; z-index: 99; max-width: 90vw; text-align: center;
+    border: 1px solid var(--line2); box-shadow: var(--shadow); z-index: 99; max-width: 90vw; text-align: center;
   }
   #toast.show { opacity: 1; }
+  #queueList::-webkit-scrollbar { width: 6px; }
+  #queueList::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 3px; }
   @media (max-width: 900px) {
     #layout { flex-direction: column; }
     #queuePanel { width: 100%; max-height: none; }
@@ -159,11 +200,13 @@
         <div id="player"></div>
         <button id="btnUnmute" hidden>🔊 タップしてミュート解除</button>
       </div>
-      <div id="nowTitle"></div>
-      <div id="controlsRow">
-        <button id="btnCC" class="ghost" title="全員の字幕表示を切り替えます">字幕: OFF</button>
+      <div id="nowBar">
+        <div id="nowTitle"></div>
+        <div id="controlsRow">
+          <button id="btnCC" class="ghost" title="全員の字幕表示を切り替えます">字幕: OFF</button>
+          <button id="btnNext" title="次の動画を再生(全員に同期)" disabled>次の動画 <span class="chev">»</span></button>
+        </div>
       </div>
-      <div id="syncNote">※ 再生・一時停止・シーク操作は参加者全員に同期されます。</div>
     </div>
     <div id="queuePanel">
       <h2>再生リスト(キュー)</h2>
@@ -200,6 +243,8 @@ let suppressUntil = 0;       // この時刻まで自分発のイベント送信
 let suppressRateUntil = 0;   // 速度変更イベントの送信抑制
 let pendingRate = 1;         // プレーヤー準備前に受信した再生速度
 let captionsOn = false;      // 字幕表示状態(全員同期)
+let captionsApplied = false; // 現在の動画に字幕を適用済みか(動画ごとに1回だけ適用)
+let noCaptionNotified = false; // 字幕無し通知を出したか(動画ごとに1回)
 let joinMuted = false;       // 途中参加時のミュート自動再生フラグ
 let lastPolledTime = null;
 let lastPlayerState = -1;
@@ -263,18 +308,40 @@ function saveQueue() {
   try { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); } catch (e) {}
 }
 
-/* 字幕の適用(非公式APIのためtry-catchで保護) */
+/* 字幕の適用(非公式APIのためtry-catchで保護)。適用できたら true を返す */
 function applyCaptions(on) {
-  if (!playerReady) return;
+  if (!playerReady) return false;
   try {
     if (on) {
       player.loadModule("captions"); // HTML5プレーヤー
       player.loadModule("cc");       // 旧プレーヤー互換
+      selectCaptionTrack(0);         // トラックを明示選択して確実に表示(ja優先)
     } else {
+      try { player.setOption("captions", "track", {}); } catch (e) {}
+      try { player.setOption("cc", "track", {}); } catch (e) {}
       player.unloadModule("captions");
       player.unloadModule("cc");
     }
   } catch (e) { /* 非対応動画では無視 */ }
+  return true;
+}
+
+/* 字幕トラックを選択。loadModule直後は一覧が未取得のことがあるため数回リトライ。
+   一覧が空のまま(=字幕の無い動画)なら1回だけ通知する。 */
+function selectCaptionTrack(tries) {
+  if (!playerReady || !captionsOn) return;
+  let list = [];
+  try { list = player.getOption("captions", "tracklist") || []; } catch (e) {}
+  if (list.length) {
+    const track = list.find(t => t.languageCode === "ja") || list[0];
+    try { player.setOption("captions", "track", track); } catch (e) {}
+    try { player.setOption("cc", "track", track); } catch (e) {}
+  } else if (tries < 6) {
+    setTimeout(() => selectCaptionTrack(tries + 1), 400); // 一覧取得を待って再試行
+  } else if (!noCaptionNotified) {
+    noCaptionNotified = true;
+    toast("この動画には字幕がありません");
+  }
 }
 
 function setCaptions(on, fromRemote) {
@@ -282,7 +349,9 @@ function setCaptions(on, fromRemote) {
   const btn = $("btnCC");
   btn.textContent = "字幕: " + (on ? "ON" : "OFF");
   btn.classList.toggle("ccon", on);
-  applyCaptions(on);
+  noCaptionNotified = false;          // 状態を変えたら通知判定をやり直す
+  const done = applyCaptions(on);     // playerReadyなら即適用
+  captionsApplied = on && done;       // 未readyなら後の最初のPLAYINGで適用される
   if (!fromRemote) broadcast({ type: "captions", on });
 }
 
@@ -612,26 +681,55 @@ window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
   document.head.appendChild(tag);
 })();
 
+/* 自動再生フォールバック:
+   リモート(load/state)起点の再生は呼び出しにユーザー操作が含まれず、
+   ブラウザの自動再生制限で音声付き再生がブロックされることがある。
+   まず音声付きで再生を試み、一定時間たっても再生もバッファリングも
+   していなければ「ブロックされた」と判断してミュート再生に切り替え、
+   解除ボタンを表示する(同期は維持したまま、音声は手動で復帰できる)。 */
+function tryAutoplay(attempt = 0) {
+  if (!playerReady || joinMuted) return; // joinMutedは別途ミュート処理済み
+  player.playVideo();
+  clearTimeout(tryAutoplay._timer);
+  tryAutoplay._timer = setTimeout(() => {
+    if (!playerReady || joinMuted) return;
+    const st = player.getPlayerState();
+    if (st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING) return; // 再生中/読込中はOK
+    if (st === YT.PlayerState.UNSTARTED && attempt < 2) { // まだ読込待ちの可能性 → 再確認
+      tryAutoplay(attempt + 1);
+      return;
+    }
+    // ブロックと判断 → ミュートで再生し、解除ボタンを表示
+    player.mute();
+    $("btnUnmute").hidden = false;
+    player.playVideo();
+  }, 1500);
+}
+
 function createPlayer(index, startTime, autoplay) {
   const item = queue[index];
   if (!item) return;
   $("playerEmpty").style.display = "none";
   currentVideoId = item.id;
+  captionsApplied = false; noCaptionNotified = false; // 新しい動画 → 字幕適用状態をリセット
   player = new YT.Player("player", {
     videoId: item.id,
-    playerVars: { autoplay: autoplay ? 1 : 0, start: Math.floor(startTime), playsinline: 1, cc_lang_pref: "ja" },
+    playerVars: { autoplay: autoplay ? 1 : 0, start: Math.floor(startTime), playsinline: 1, cc_lang_pref: "ja", cc_load_policy: 1 },
     events: {
       onReady: () => {
         playerReady = true;
         lastPolledTime = null;
         if (Math.abs(pendingRate - 1) > 0.01) { suppressRate(); player.setPlaybackRate(pendingRate); }
-        if (captionsOn) applyCaptions(true);
+        if (captionsOn) { applyCaptions(true); captionsApplied = true; }
         if (joinMuted) {
           player.mute();
           $("btnUnmute").hidden = false;
         }
         startPolling();
-        if (autoplay) player.playVideo();
+        if (autoplay) {
+          if (joinMuted) player.playVideo();   // 途中参加: 既にミュート設定済み
+          else tryAutoplay();                  // ブロック検知付きで再生
+        }
       },
       onStateChange: onPlayerStateChange,
       onError: onPlayerError,
@@ -662,8 +760,14 @@ function loadVideo(index, startTime = 0, autoplay = true, fromRemote = false) {
   } else {
     lastPolledTime = null;
     currentVideoId = item.id;
-    if (autoplay) player.loadVideoById(item.id, startTime);
-    else player.cueVideoById(item.id, startTime);
+    captionsApplied = false; noCaptionNotified = false; // 新しい動画 → 字幕適用状態をリセット
+    if (autoplay) {
+      player.loadVideoById(item.id, startTime);
+      // リモート起点の再生は自動再生がブロックされ得るのでフォールバックを仕込む
+      if (fromRemote) setTimeout(() => tryAutoplay(), 300);
+    } else {
+      player.cueVideoById(item.id, startTime);
+    }
     $("nowTitle").textContent = "▶ " + (item.title || item.id);
   }
 }
@@ -702,17 +806,30 @@ function onPlayerError(e) {
 function onPlayerStateChange(e) {
   const s = e.data;
   if (s === YT.PlayerState.ENDED) {
-    // 自動で次へ(ホストのみが進行役。レース回避)
-    if (isHost && currentIndex < queue.length - 1) {
-      const next = currentIndex + 1;
-      loadVideo(next, 0, true);
-      broadcast({ type: "load", index: next, time: 0 });
+    // 再生が終わった動画はキューから削除し、次の動画へ(ホストのみが進行役。レース回避)
+    if (isHost && currentIndex >= 0 && currentIndex < queue.length) {
+      const finished = currentIndex;
+      queue.splice(finished, 1);                 // 終了した動画を削除
+      if (finished < queue.length) {
+        // 削除により、同じ位置に繰り上がった次の動画を再生
+        broadcast({ type: "queue", queue, index: finished });
+        loadVideo(finished, 0, true);            // currentIndex更新・再描画・再生
+        broadcast({ type: "load", index: finished, time: 0 });
+      } else {
+        // 終了したのが最後の動画 → 再生終了、キューは空または末尾消化
+        currentIndex = -1;
+        renderQueue();
+        broadcast({ type: "queue", queue, index: currentIndex });
+      }
     }
     lastPlayerState = s;
     return;
   }
-  // 動画切替後も字幕状態を維持(loadModuleは冪等)
-  if (s === YT.PlayerState.PLAYING && captionsOn) applyCaptions(true);
+  // 動画切替後、最初のPLAYINGで字幕を1回だけ適用(毎回呼ぶとトラック選択がリセットされ得る)
+  if (s === YT.PlayerState.PLAYING && captionsOn && !captionsApplied) {
+    applyCaptions(true);
+    captionsApplied = true;
+  }
   if (!isSuppressed()) {
     if (s === YT.PlayerState.PLAYING && lastPlayerState !== YT.PlayerState.PLAYING) {
       broadcast({ type: "play", time: player.getCurrentTime() });
@@ -766,6 +883,9 @@ function renderQueue() {
   ul.innerHTML = "";
   $("queueEmpty").style.display = queue.length ? "none" : "block";
   saveQueue();
+  // 「次の動画」ボタン: 次がなければ無効化
+  const _bn = $("btnNext");
+  if (_bn) _bn.disabled = (currentIndex < 0 || currentIndex >= queue.length - 1);
   queue.forEach((item, i) => {
     const li = document.createElement("li");
     li.draggable = true;
@@ -850,10 +970,25 @@ async function addUrl() {
   broadcast({ type: "queue", queue, index: currentIndex });
 }
 
+/* 次の動画へ(タイトルクリックと同じく誰でも操作可・全員に同期) */
+function playNext() {
+  if (currentIndex < 0 || currentIndex >= queue.length - 1) return; // 末尾なら何もしない
+  const next = currentIndex + 1;
+  loadVideo(next, 0, true);
+  broadcast({ type: "load", index: next, time: 0 });
+}
+
 $("btnCC").onclick = () => setCaptions(!captionsOn, false);
+$("btnNext").onclick = playNext;
 $("btnAdd").onclick = addUrl;
 $("urlInput").addEventListener("keydown", e => { if (e.key === "Enter") addUrl(); });
 /* v2.0: ホスト引き継ぎ / ミュート自動再生 / 遅延補正 / サムネイル / キュー永続化 / 招待リンク */
+/* v2.1: 再生が終わった動画はキューから自動削除(全員同期) */
+/* v2.2: load経由の自動再生もブロック検知 → ミュート再生+解除ボタンでフォールバック */
+/* v2.3: UIをダークミニマル(夜の書斎)に刷新 — 明朝見出し/セージのアクセント/ヘアライン */
+/* v2.4: 再生中タイトル下に「次の動画 »」ボタン追加(全員同期・末尾で無効化) */
+/* v2.5: UIをBento Soft(大きな角丸カード×エメラルド)に刷新 — 機能は不変 */
+/* v2.6: 字幕の信頼性改善 — トラック明示選択/動画ごと1回適用/cc_load_policy/字幕無し通知 */
 </script>
 </body>
 </html>
