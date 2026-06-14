@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube SyncWatch v2.11</title>
+<title>YouTube SyncWatch v2.12</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <style>
   :root {
@@ -113,8 +113,10 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   #controlsRow { flex-shrink: 0; display: flex; gap: 8px; }
+  /* 字幕機能(無効化・再利用のため保持)
   #btnCC { padding: 7px 14px; font-size: .8rem; }
   #btnCC.ccon { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  */
   #btnNext { padding: 7px 14px; font-size: .8rem; letter-spacing: .02em; display: inline-flex; align-items: center; gap: 6px; }
   #btnNext .chev { font-family: monospace; font-size: 1.05rem; line-height: 1; }
 
@@ -172,7 +174,7 @@
 
 <!-- ロビー画面 -->
 <div id="lobby">
-  <h1>▶ YouTube <span>SyncWatch</span> v2.11</h1>
+  <h1>▶ YouTube <span>SyncWatch</span> v2.12</h1>
   <div class="card">
     <h2>新しいルームを作成</h2>
     <button id="btnCreate">ルームを作成する</button>
@@ -188,7 +190,7 @@
 <!-- メイン画面 -->
 <div id="main">
   <div id="topbar">
-    <div class="title">▶ YouTube <span>SyncWatch</span></div>
+    <div class="title">▶ YouTube <span>SyncWatch</span> v2.12</div>
     <div id="roomBadge" title="クリックでルームIDをコピー"></div>
     <button id="btnInvite" class="ghost">招待リンクをコピー</button>
     <div id="peerCount"></div>
@@ -203,7 +205,7 @@
       <div id="nowBar">
         <div id="nowTitle"></div>
         <div id="controlsRow">
-          <button id="btnCC" class="ghost" title="全員の字幕表示を切り替えます">字幕: OFF</button>
+          <!-- 字幕機能(無効化・再利用のため保持): <button id="btnCC" class="ghost" title="全員の字幕表示を切り替えます">字幕: OFF</button> -->
           <button id="btnNext" title="次の動画を再生(全員に同期)" disabled>次の動画 <span class="chev">»</span></button>
         </div>
       </div>
@@ -242,9 +244,10 @@ let playerReady = false;
 let suppressUntil = 0;       // この時刻まで自分発のイベント送信を抑制
 let suppressRateUntil = 0;   // 速度変更イベントの送信抑制
 let pendingRate = 1;         // プレーヤー準備前に受信した再生速度
-let captionsOn = false;      // 字幕表示状態(全員同期)
-let captionsApplied = false; // 現在の動画に字幕を適用済みか(動画ごとに1回だけ適用)
-let noCaptionNotified = false; // 字幕無し通知を出したか(動画ごとに1回)
+// 字幕機能(無効化・再利用のため保持)
+// let captionsOn = false;      // 字幕表示状態(全員同期)
+// let captionsApplied = false; // 現在の動画に字幕を適用済みか(動画ごとに1回だけ適用)
+// let noCaptionNotified = false; // 字幕無し通知を出したか(動画ごとに1回)
 let pendingRemoteLoad = null; // queue未着で空振りした遠隔loadの保留 {index, time}
 let joinMuted = false;       // 途中参加時のミュート自動再生フラグ
 let lastPolledTime = null;
@@ -253,7 +256,7 @@ const POLL_MS = 500;
 const QUEUE_KEY = "ytsync-queue";
 const HOST_KEY = "ytsync-host"; // このタブがどのルームのホストか(sessionStorage, リロード復帰用)
 const PLAY_KEY = "ytsync-play"; // ホストの再生位置(localStorage, リロード復帰用)
-const RELAY_TYPES = new Set(["play", "pause", "seek", "load", "queue", "rate", "captions"]);
+const RELAY_TYPES = new Set(["play", "pause", "seek", "load", "queue", "rate"]); // "captions"は字幕機能無効化のため除外
 
 const $ = (id) => document.getElementById(id);
 
@@ -340,52 +343,52 @@ function restorePlayback() {
   return true;
 }
 
-/* 字幕の適用(非公式APIのためtry-catchで保護)。適用できたら true を返す */
-function applyCaptions(on) {
-  if (!playerReady) return false;
-  try {
-    if (on) {
-      player.loadModule("captions"); // HTML5プレーヤー
-      player.loadModule("cc");       // 旧プレーヤー互換
-      selectCaptionTrack(0);         // トラックを明示選択して確実に表示(ja優先)
-    } else {
-      try { player.setOption("captions", "track", {}); } catch (e) {}
-      try { player.setOption("cc", "track", {}); } catch (e) {}
-      player.unloadModule("captions");
-      player.unloadModule("cc");
-    }
-  } catch (e) { /* 非対応動画では無視 */ }
-  return true;
-}
-
-/* 字幕トラックを選択。loadModule直後は一覧が未取得のことがあるため数回リトライ。
-   一覧が空のまま(=字幕の無い動画)なら1回だけ通知する。 */
-function selectCaptionTrack(tries) {
-  if (!playerReady || !captionsOn) return;
-  let list = [];
-  try { list = player.getOption("captions", "tracklist") || []; } catch (e) {}
-  if (list.length) {
-    const track = list.find(t => t.languageCode === "ja") || list[0];
-    try { player.setOption("captions", "track", track); } catch (e) {}
-    try { player.setOption("cc", "track", track); } catch (e) {}
-  } else if (tries < 6) {
-    setTimeout(() => selectCaptionTrack(tries + 1), 400); // 一覧取得を待って再試行
-  } else if (!noCaptionNotified) {
-    noCaptionNotified = true;
-    toast("この動画には字幕がありません");
-  }
-}
-
-function setCaptions(on, fromRemote) {
-  captionsOn = on;
-  const btn = $("btnCC");
-  btn.textContent = "字幕: " + (on ? "ON" : "OFF");
-  btn.classList.toggle("ccon", on);
-  noCaptionNotified = false;          // 状態を変えたら通知判定をやり直す
-  const done = applyCaptions(on);     // playerReadyなら即適用
-  captionsApplied = on && done;       // 未readyなら後の最初のPLAYINGで適用される
-  if (!fromRemote) broadcast({ type: "captions", on });
-}
+// ===== 字幕機能(無効化・再利用のため保持) =====
+// function applyCaptions(on) {
+//   if (!playerReady) return false;
+//   try {
+//     if (on) {
+//       player.loadModule("captions"); // HTML5プレーヤー
+//       player.loadModule("cc");       // 旧プレーヤー互換
+//       selectCaptionTrack(0);         // トラックを明示選択して確実に表示(ja優先)
+//     } else {
+//       try { player.setOption("captions", "track", {}); } catch (e) {}
+//       try { player.setOption("cc", "track", {}); } catch (e) {}
+//       player.unloadModule("captions");
+//       player.unloadModule("cc");
+//     }
+//   } catch (e) { /* 非対応動画では無視 */ }
+//   return true;
+// }
+//
+// 字幕トラックを選択。loadModule直後は一覧が未取得のことがあるため数回リトライ。
+// 一覧が空のまま(=字幕の無い動画)なら1回だけ通知する。
+// function selectCaptionTrack(tries) {
+//   if (!playerReady || !captionsOn) return;
+//   let list = [];
+//   try { list = player.getOption("captions", "tracklist") || []; } catch (e) {}
+//   if (list.length) {
+//     const track = list.find(t => t.languageCode === "ja") || list[0];
+//     try { player.setOption("captions", "track", track); } catch (e) {}
+//     try { player.setOption("cc", "track", track); } catch (e) {}
+//   } else if (tries < 6) {
+//     setTimeout(() => selectCaptionTrack(tries + 1), 400); // 一覧取得を待って再試行
+//   } else if (!noCaptionNotified) {
+//     noCaptionNotified = true;
+//     toast("この動画には字幕がありません");
+//   }
+// }
+//
+// function setCaptions(on, fromRemote) {
+//   captionsOn = on;
+//   const btn = $("btnCC");
+//   btn.textContent = "字幕: " + (on ? "ON" : "OFF");
+//   btn.classList.toggle("ccon", on);
+//   noCaptionNotified = false;          // 状態を変えたら通知判定をやり直す
+//   const done = applyCaptions(on);     // playerReadyなら即適用
+//   captionsApplied = on && done;       // 未readyなら後の最初のPLAYINGで適用される
+//   if (!fromRemote) broadcast({ type: "captions", on });
+// }
 
 /* ====================== 通信 ====================== */
 function sendAll(msg, exclude) {
@@ -402,8 +405,8 @@ function fullState() {
     queue, index: currentIndex,
     time: playerReady && player.getCurrentTime ? player.getCurrentTime() : 0,
     playing: playerReady && player.getPlayerState && player.getPlayerState() === YT.PlayerState.PLAYING,
-    rate: currentRate(),
-    captions: captionsOn
+    rate: currentRate()
+    // captions: captionsOn  // 字幕機能(無効化・再利用のため保持)
   };
 }
 
@@ -527,7 +530,7 @@ function handleMessage(msg, fromConn) {
       queue = msg.queue || [];
       currentIndex = msg.index;
       pendingRate = msg.rate || 1;
-      if (typeof msg.captions === "boolean") setCaptions(msg.captions, true);
+      // if (typeof msg.captions === "boolean") setCaptions(msg.captions, true); // 字幕機能(無効化・再利用のため保持)
       renderQueue();
       const item = currentIndex >= 0 ? queue[currentIndex] : null;
       if (!item) break;
@@ -552,9 +555,10 @@ function handleMessage(msg, fromConn) {
       pendingRate = msg.rate;
       if (playerReady) { suppressRate(); player.setPlaybackRate(msg.rate); }
       break;
-    case "captions":
-      setCaptions(msg.on, true);
-      break;
+    // 字幕機能(無効化・再利用のため保持)
+    // case "captions":
+    //   setCaptions(msg.on, true);
+    //   break;
     case "play": {
       if (!playerReady) break;
       suppress();
@@ -771,16 +775,16 @@ function createPlayer(index, startTime, autoplay) {
   if (!item) return;
   $("playerEmpty").style.display = "none";
   currentVideoId = item.id;
-  captionsApplied = false; noCaptionNotified = false; // 新しい動画 → 字幕適用状態をリセット
+  // captionsApplied = false; noCaptionNotified = false; // 字幕機能(無効化・再利用のため保持)
   player = new YT.Player("player", {
     videoId: item.id,
-    playerVars: { autoplay: autoplay ? 1 : 0, start: Math.floor(startTime), playsinline: 1, cc_lang_pref: "ja", cc_load_policy: 1 },
+    playerVars: { autoplay: autoplay ? 1 : 0, start: Math.floor(startTime), playsinline: 1 }, // 字幕無効化: cc_lang_pref/cc_load_policy を削除
     events: {
       onReady: () => {
         playerReady = true;
         lastPolledTime = null;
         if (Math.abs(pendingRate - 1) > 0.01) { suppressRate(); player.setPlaybackRate(pendingRate); }
-        if (captionsOn) { applyCaptions(true); captionsApplied = true; }
+        // if (captionsOn) { applyCaptions(true); captionsApplied = true; } // 字幕機能(無効化・再利用のため保持)
         if (joinMuted) {
           player.mute();
           $("btnUnmute").hidden = false;
@@ -824,7 +828,7 @@ function loadVideo(index, startTime = 0, autoplay = true, fromRemote = false) {
   } else {
     lastPolledTime = null;
     currentVideoId = item.id;
-    captionsApplied = false; noCaptionNotified = false; // 新しい動画 → 字幕適用状態をリセット
+    // captionsApplied = false; noCaptionNotified = false; // 字幕機能(無効化・再利用のため保持)
     if (autoplay) {
       player.loadVideoById(item.id, startTime);
       // リモート起点の再生は自動再生がブロックされ得るのでフォールバックを仕込む
@@ -901,11 +905,12 @@ function onPlayerStateChange(e) {
     lastPlayerState = s;
     return;
   }
+  // 字幕機能(無効化・再利用のため保持)
   // 動画切替後、最初のPLAYINGで字幕を1回だけ適用(毎回呼ぶとトラック選択がリセットされ得る)
-  if (s === YT.PlayerState.PLAYING && captionsOn && !captionsApplied) {
-    applyCaptions(true);
-    captionsApplied = true;
-  }
+  // if (s === YT.PlayerState.PLAYING && captionsOn && !captionsApplied) {
+  //   applyCaptions(true);
+  //   captionsApplied = true;
+  // }
   if (!isSuppressed()) {
     if (s === YT.PlayerState.PLAYING && lastPlayerState !== YT.PlayerState.PLAYING) {
       broadcast({ type: "play", time: player.getCurrentTime() });
@@ -1061,7 +1066,7 @@ function playNext() {
   broadcast({ type: "load", index: cur, time: 0 }); // 再生指示は queue の後
 }
 
-$("btnCC").onclick = () => setCaptions(!captionsOn, false);
+// $("btnCC").onclick = () => setCaptions(!captionsOn, false); // 字幕機能(無効化・再利用のため保持)
 $("btnNext").onclick = playNext;
 $("btnAdd").onclick = addUrl;
 $("urlInput").addEventListener("keydown", e => { if (e.key === "Enter") addUrl(); });
@@ -1077,6 +1082,7 @@ $("urlInput").addEventListener("keydown", e => { if (e.key === "Enter") addUrl()
 /* v2.9: 招待リンク(ハッシュにルームID)で開いたら自動参加してメイン画面へ直行 */
 /* v2.10: ホストのリロード復帰 — sessionStorageでホスト判定しルーム再作成(キュー復元)、ID引継ぎ済みならゲスト参加にフォールバック */
 /* v2.11: ホスト復帰時に再生中だった動画と再生位置も復元(localStorageに定期保存し再開) */
+/* v2.12: 字幕オン/オフ機能を無効化(コードは再利用のためコメントで保持) */
 </script>
 </body>
 </html>
