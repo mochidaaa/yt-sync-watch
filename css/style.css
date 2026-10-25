@@ -1,0 +1,225 @@
+  :root {
+    /* Bento Soft (dark) — 大きな角丸カード × エメラルド × クリーンなサンセリフ */
+    --bg: #0f1115;          /* ページ背景(濃いチャコール) */
+    --panel: #1b1e24;       /* カード面 */
+    --panel2: #232730;      /* 入れ子(入力欄/キュー行) */
+    --line: rgba(255,255,255,.08);   /* 細い境界(既定) */
+    --line2: rgba(255,255,255,.16);  /* 境界(強調/フォーカス) */
+    --accent: #34d399;      /* エメラルド */
+    --accent-soft: rgba(52,211,153,.10); /* アクセントの薄い面 */
+    --on-accent: #07120d;   /* アクセント上の濃い文字 */
+    --text: #e7eaee;
+    --sub: #9aa1ac;
+    --radius: 18px;         /* カード */
+    --radius-sm: 12px;      /* 入れ子要素 */
+    --radius-btn: 10px;     /* ボタン */
+    --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    --shadow: 0 8px 28px rgba(0,0,0,.38);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* ---------- Lobby ---------- */
+  #lobby {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh; gap: 22px; padding: 24px;
+  }
+  #lobby h1 {
+    font-weight: 600; font-size: 2rem; letter-spacing: -.01em; line-height: 1.25;
+  }
+  #lobby h1 span { color: var(--accent); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px; width: 100%; max-width: 420px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .card h2 {
+    font-size: .9rem; color: var(--sub); font-weight: 500; letter-spacing: .01em;
+  }
+  input[type=text] {
+    background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+    border-radius: var(--radius-btn); padding: 12px 14px; font-size: 0.95rem; width: 100%;
+    outline: none; font-family: var(--sans); transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=text]::placeholder { color: var(--sub); }
+  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button {
+    background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--radius-btn);
+    padding: 12px 18px; font-size: 0.92rem; font-weight: 600; letter-spacing: .01em;
+    cursor: pointer; transition: filter .15s, background .15s, border-color .15s;
+    font-family: var(--sans);
+  }
+  button:hover { filter: brightness(1.08); }
+  /* 控えめなソフトボタン(主役のCreate/Next/追加は塗りで強調) */
+  button.secondary, button.ghost {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+  }
+  button.secondary:hover, button.ghost:hover { filter: none; background: #2b303b; border-color: var(--line2); }
+  button:disabled { opacity: .4; cursor: default; filter: none; }
+  #lobbyStatus { color: var(--sub); font-size: .85rem; min-height: 1.2em; text-align: center; }
+
+  /* ---------- Main ---------- */
+  #main { display: none; padding: 22px 18px; max-width: 1240px; margin: 0 auto; }
+  #topbar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  #topbar .title { font-weight: 600; font-size: 1.15rem; letter-spacing: -.01em; }
+  #topbar .title span { color: var(--accent); }
+  #roomBadge {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius-btn); padding: 7px 12px;
+    font-family: monospace; font-size: .95rem; letter-spacing: 2px; cursor: pointer;
+    color: var(--text); transition: border-color .15s, background .15s;
+  }
+  #roomBadge:hover { background: #2b303b; border-color: var(--accent); }
+  #btnInvite { padding: 7px 14px; font-size: .82rem; }
+  #peerCount { color: var(--sub); font-size: .85rem; }
+  #layout { display: flex; gap: 20px; align-items: flex-start; }
+  #playerWrap { flex: 1; min-width: 0; }
+  #playerBox {
+    position: relative; width: 100%; aspect-ratio: 16/9;
+    background: #000; border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden; box-shadow: var(--shadow);
+  }
+  #playerBox iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #playerEmpty {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; color: var(--sub); font-size: 1rem;
+  }
+  #btnUnmute {
+    position: absolute; top: 14px; left: 14px; z-index: 5;
+    background: var(--accent); color: var(--on-accent); font-size: .85rem;
+  }
+  /* タイトル(左) とボタン(右) を動画直下の横一列に — ソフトカードで包む */
+  #nowBar {
+    margin-top: 12px; display: flex; align-items: center; gap: 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 10px 14px;
+  }
+  #nowTitle {
+    flex: 1; min-width: 0; font-size: 1.02rem; font-weight: 500; color: var(--text);
+    min-height: 1.3em; line-height: 1.5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #controlsRow { flex-shrink: 0; display: flex; gap: 8px; }
+  /* 字幕機能(無効化・再利用のため保持)
+  #btnCC { padding: 7px 14px; font-size: .8rem; }
+  #btnCC.ccon { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  */
+  #btnNext { padding: 7px 14px; font-size: .8rem; letter-spacing: .02em; display: inline-flex; align-items: center; gap: 6px; }
+  #btnNext .chev { font-family: monospace; font-size: 1.05rem; line-height: 1; }
+
+  /* ---------- Queue ---------- */
+  #queuePanel {
+    width: 340px; flex-shrink: 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
+    display: flex; flex-direction: column; gap: 14px; box-shadow: var(--shadow);
+    max-height: calc(100vh - 130px);
+  }
+  #queuePanel h2 { font-size: 1rem; color: var(--text); font-weight: 600; letter-spacing: -.01em; }
+  #addRow { display: flex; gap: 8px; }
+  #addRow input { flex: 1; }
+  #queueList { list-style: none; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  #queueList li {
+    background: var(--panel2); border: 1px solid transparent; border-radius: var(--radius-sm);
+    padding: 8px; display: flex; align-items: center; gap: 10px; cursor: grab;
+    font-size: .86rem; transition: border-color .15s, background .15s;
+  }
+  #queueList li:hover { border-color: var(--line2); }
+  #queueList li.playing { border-color: var(--accent); background: var(--accent-soft); }
+  #queueList li.playing .qtitle { color: var(--accent); }
+  #queueList li.dragover { border-color: var(--accent); background: rgba(52,211,153,.16); }
+  #queueList li .grip { color: var(--sub); cursor: grab; user-select: none; }
+  #queueList li .thumb {
+    width: 56px; height: 32px; object-fit: cover; border-radius: 8px;
+    flex-shrink: 0; background: #000;
+  }
+  #queueList li .qtitle {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+    transition: color .15s;
+  }
+  #queueList li .qtitle:hover { color: var(--accent); }
+  #queueList li .del {
+    background: none; color: var(--sub); padding: 2px 6px; font-size: 1rem; border: none;
+  }
+  #queueList li .del:hover { color: var(--accent); background: none; border: none; filter: none; }
+  #queueEmpty { color: var(--sub); font-size: .85rem; text-align: center; padding: 16px 0; }
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); padding: 11px 20px; border-radius: var(--radius-sm);
+    font-size: .85rem; opacity: 0; transition: opacity .3s; pointer-events: none;
+    border: 1px solid var(--line2); box-shadow: var(--shadow); z-index: 99; max-width: 90vw; text-align: center;
+  }
+  #toast.show { opacity: 1; }
+  #queueList::-webkit-scrollbar { width: 6px; }
+  #queueList::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 3px; }
+  @media (max-width: 900px) {
+    #layout { flex-direction: column; }
+    #queuePanel { width: 100%; max-height: none; }
+  }
+
+/* ===================================================================
+   v2.20 レビュー反映の追補
+   （後方の定義が優先されるため、既存ルールを書き換えず上書きする）
+   =================================================================== */
+
+/* キュー項目のタイトルを button 化したため、ボタン既定の見た目を打ち消す。
+   見た目は従来のテキストのまま、キーボード操作だけが可能になる。 */
+#queueList li .qtitle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+#queueList li .qtitle:hover { background: none; filter: none; color: var(--accent); }
+#queueList li.playing .qtitle { color: var(--accent); }
+
+/* ルームIDバッジも button 化したので、文字の太さだけ従来に合わせる */
+#roomBadge { font-weight: 500; }
+
+/* 無効ボタン: opacity を下げるとコントラスト比が不足するため、
+   専用の配色で「押せない」ことを示す(WCAG 1.4.3/1.4.11 対策)。 */
+button:disabled,
+button.secondary:disabled,
+button.ghost:disabled {
+  opacity: 1;
+  background: var(--panel2);
+  color: var(--sub);
+  border: 1px solid var(--line);
+  cursor: default;
+  filter: none;
+}
+button:disabled:hover { background: var(--panel2); filter: none; }
+
+/* キーボード操作時のフォーカスを明示する(マウス操作では出さない) */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 画面遷移時にプログラムから当てるフォーカスは枠を出さない */
+#mainTitle:focus { outline: none; }
+
+/* 再生対象が無くなったとき、iframe の上に空表示を出すため重ねる */
+#playerEmpty { z-index: 2; }
+
+/* モバイルのアドレスバーで高さが足りなくなるのを防ぐ */
+body { min-height: 100dvh; }
+#lobby { min-height: 100dvh; }
+
+/* 動きを抑える設定のユーザーにはトランジションを無効化する */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
