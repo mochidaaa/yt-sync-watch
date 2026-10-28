@@ -2,7 +2,7 @@
 
 /* ====================== バージョン ====================== */
 /* 表示用バージョンはここ一箇所。HTML側の ?v= クエリのみ別途更新する。 */
-const APP_VERSION = "2.20";
+const APP_VERSION = "2.21";
 
 /* ====================== 定数 ====================== */
 const PREFIX = "ytsync-room-";
@@ -610,7 +610,7 @@ function handleMessage(raw, fromConn) {
     //   setCaptions(msg.on, true);
     //   break;
     case "play": {
-      if (!playerReady) break;
+      if (!playerReady || currentIndex < 0) break;  // 再生対象が無いときは無視
       cancelPendingPause();
       const t = msg.time + lagOf(msg, fromConn) * currentRate();
       if (Math.abs(player.getCurrentTime() - t) > SYNC_TOLERANCE) seekLocal(t);
@@ -627,8 +627,14 @@ function handleMessage(raw, fromConn) {
       break;
     }
     case "seek": {
-      if (!playerReady) break;
-      const playing = player.getPlayerState() === YT.PlayerState.PLAYING;
+      if (!playerReady || currentIndex < 0) break;
+      const st = player.getPlayerState();
+      /* YouTubeの seekTo は「一時停止中なら停止のまま、それ以外の状態(終了・頭出し等)
+         なら再生を開始する」仕様。終了済み・未開始の動画に適用すると勝手に再生が
+         始まるため、再生中/一時停止中/読込中のときだけ適用する。 */
+      if (st !== YT.PlayerState.PLAYING && st !== YT.PlayerState.PAUSED &&
+          st !== YT.PlayerState.BUFFERING) break;
+      const playing = st === YT.PlayerState.PLAYING;
       seekLocal(msg.time + (playing ? lagOf(msg, fromConn) * currentRate() : 0));
       break;
     }
@@ -638,15 +644,22 @@ function handleMessage(raw, fromConn) {
       loadVideo(msg.index, msg.time, true, true);
       break;
     case "queue": {
+      const hadCurrent = currentIndex >= 0;
       queue = msg.queue;
       currentIndex = safeIndex(msg.index, queue.length);
-      renderQueue();
       saveQueue();
+      if (hadCurrent && currentIndex < 0 && currentVideoId) {
+        /* ホスト側で再生対象が無くなった(最後の動画が終わった等)。
+           こちらも停止して空表示に揃える(終了画面のまま残さない)。 */
+        stopPlayback();
+      } else {
+        renderQueue();
+      }
       applyPendingRemoteLoad();   // 先行していた load の保留があればここで適用
       break;
     }
     case "timesync": {            // ホストからの定期同期
-      if (!playerReady || isHost) break;
+      if (!playerReady || isHost || currentIndex < 0) break;
       if (Math.abs(currentRate() - msg.rate) > 0.01) {
         pendingRate = msg.rate;
         suppressRate();
@@ -979,7 +992,11 @@ function stopPlayback() {
   currentIndex = -1;
   currentVideoId = null;
   pendingRemoteLoad = null;
+  cancelPendingPause();
   if (playerReady) { try { player.stopVideo(); } catch (e) {} }
+  /* stopVideo で再生位置が0に戻る。これをシーク操作と誤検知しないよう基準を捨てる */
+  lastPolledTime = null;
+  lastPollAt = null;
   $("nowTitle").textContent = "";
   $("playerEmpty").style.display = "";
   renderQueue();
@@ -1100,6 +1117,16 @@ function startPolling() {
       const state = player.getPlayerState();
       const elapsed = (lastPollAt === null) ? 0 : (now - lastPollAt) / 1000;
       lastPollAt = now;
+
+      /* 未開始・終了・頭出しの状態で位置が変わるのはユーザー操作ではない
+         (stopVideo や動画終了で位置が0に戻る等)。基準だけ更新して判定しない。
+         これを怠ると「0へのシーク」を誤配信し、受け手側で終了済みの動画が
+         最初から再生し直される(最後の動画が2回再生される不具合の原因)。 */
+      if (state === YT.PlayerState.UNSTARTED || state === YT.PlayerState.ENDED ||
+          state === YT.PlayerState.CUED) {
+        lastPolledTime = t;
+        return;
+      }
 
       if (lastPolledTime !== null) {
         /* バックグラウンドタブやスリープでタイマーが間引かれると、固定間隔を
@@ -1373,3 +1400,5 @@ document.querySelectorAll(".ver").forEach(el => { el.textContent = "v" + APP_VER
           タイトル取得にタイムアウトと型チェック、await中のキュー差し替えを検知
    [UI/A11y] 一覧をボタン化しキーボード操作に対応(Alt+↑↓で並び替え)、aria-live/ラベル追加
           無効ボタンのコントラスト改善、フォーカスリング、CSP、dvh、reduced-motion 対応 */
+/* v2.21: 最後の動画が2回再生される不具合を修正 — 終了/頭出し/未開始時の位置変化をシーク誤検知しない、
+          終了済み動画へのseek/play適用を防止、ホスト停止時はゲストも停止表示に揃える */
